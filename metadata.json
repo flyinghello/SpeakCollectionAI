@@ -1,0 +1,7 @@
+{
+  "name": "SpeakSmart AI",
+  "description": "A mobile-first oral English practice tool using Gemini for grammar correction and spaced repetition reviews.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
