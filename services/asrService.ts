@@ -1,8 +1,8 @@
 import { getSettings } from "./storageService";
 
 const VOLCENGINE_API_BASE = "https://ark.cn-beijing.volces.com/api/v3";
-const DEFAULT_ASR_MODEL = "bigmodel";
-const FALLBACK_ASR_MODEL = "doubao-seed-2-0-mini-260428";
+const DEFAULT_ASR_MODEL = "doubao-seed-2-0-mini-260428";
+const FALLBACK_ASR_MODEL = "bigmodel";
 
 const toBase64 = (bytes: Uint8Array): string => {
   let binary = "";
@@ -162,3 +162,4 @@ export const transcribeAudio = async (audioBlob: Blob): Promise<string> => {
     return await tryTranscribe(FALLBACK_ASR_MODEL);
   }
 };
+

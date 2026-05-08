@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "serve": "npm run build && node server.mjs",
     "cap:sync": "npm run build && node node_modules/@capacitor/cli/bin/capacitor sync android",
     "cap:open": "node node_modules/@capacitor/cli/bin/capacitor open android"
   },

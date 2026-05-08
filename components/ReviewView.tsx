@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { getReviewQueue, processReview } from "../services/storageService";
 import { PracticeEntry, ReviewAction } from "../types";
-import { RefreshCcw, ThumbsUp, HelpCircle } from "lucide-react";
+import { RefreshCcw, ThumbsUp, HelpCircle, Volume2, Loader2 } from "lucide-react";
+import { speakSentence } from "../services/ttsService";
 
 interface ReviewItem {
     entryId: string;
@@ -17,6 +18,7 @@ const ReviewView: React.FC = () => {
   const [currentItem, setCurrentItem] = useState<ReviewItem | null>(null);
   const [isRevealed, setIsRevealed] = useState(false);
   const [finished, setFinished] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
 
   useEffect(() => {
     loadQueue();
@@ -97,6 +99,19 @@ const ReviewView: React.FC = () => {
     }
   };
 
+  const handleSpeak = async () => {
+    if (!currentItem || isSpeaking) return;
+    try {
+      setIsSpeaking(true);
+      await speakSentence(currentItem.en);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "Unknown error";
+      alert(`TTS failed: ${detail}`);
+    } finally {
+      setIsSpeaking(false);
+    }
+  };
+
   if (finished) {
     return (
         <div className="flex flex-col items-center justify-center h-full p-8 text-center bg-gray-50 pb-20">
@@ -149,9 +164,21 @@ const ReviewView: React.FC = () => {
                         className={`transition-all duration-500 ${isRevealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}
                     >
                          <div className="w-12 h-1 bg-gray-200 rounded-full mx-auto mb-6"></div>
-                         <p className="text-xl md:text-2xl font-medium text-brand-600 mb-2">
-                            {currentItem.en}
-                         </p>
+                         <div className="flex items-center justify-center gap-2 mb-2">
+                            <p className="text-xl md:text-2xl font-medium text-brand-600">
+                               {currentItem.en}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={handleSpeak}
+                              disabled={isSpeaking}
+                              className="p-2 rounded-full bg-brand-50 text-brand-600 border border-brand-100 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-100 transition-colors"
+                              aria-label="Play sentence audio"
+                              title="Play sentence audio"
+                            >
+                              {isSpeaking ? <Loader2 size={16} className="animate-spin" /> : <Volume2 size={16} />}
+                            </button>
+                         </div>
                     </div>
 
                     {!isRevealed && (

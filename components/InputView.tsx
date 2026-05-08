@@ -28,6 +28,10 @@ const InputView: React.FC = () => {
   const [modelIdInput, setModelIdInput] = useState("");
   const [asrBaseUrlInput, setAsrBaseUrlInput] = useState("");
   const [asrModelInput, setAsrModelInput] = useState("");
+  const [ttsBaseUrlInput, setTtsBaseUrlInput] = useState("");
+  const [ttsModelInput, setTtsModelInput] = useState("");
+  const [ttsAppIdInput, setTtsAppIdInput] = useState("");
+  const [ttsAccessTokenInput, setTtsAccessTokenInput] = useState("");
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -55,6 +59,10 @@ const InputView: React.FC = () => {
     setModelIdInput(settings.modelId || "");
     setAsrBaseUrlInput(settings.asrBaseUrl || "");
     setAsrModelInput(settings.asrModel || "");
+    setTtsBaseUrlInput(settings.ttsBaseUrl || "");
+    setTtsModelInput(settings.ttsModel || "");
+    setTtsAppIdInput(settings.ttsAppId || "");
+    setTtsAccessTokenInput(settings.ttsAccessToken || "");
   }, [showSettings]);
 
   const handleSaveSettings = () => {
@@ -69,6 +77,10 @@ const InputView: React.FC = () => {
       modelId: modelIdInput.trim() || undefined,
       asrBaseUrl: asrBaseUrlInput.trim() || undefined,
       asrModel: asrModelInput.trim() || undefined,
+      ttsBaseUrl: ttsBaseUrlInput.trim() || undefined,
+      ttsModel: ttsModelInput.trim() || undefined,
+      ttsAppId: ttsAppIdInput.trim() || undefined,
+      ttsAccessToken: ttsAccessTokenInput.trim() || undefined,
     });
     setShowSettings(false);
   };
@@ -209,6 +221,9 @@ const InputView: React.FC = () => {
         analysis: result,
         reviewStats: {
           level: 0,
+          repetitions: 0,
+          intervalDays: 1,
+          easinessFactor: 2.5,
           nextReviewTime: Date.now()
         }
       };
@@ -434,12 +449,64 @@ const InputView: React.FC = () => {
                              </label>
                              <input
                                 type="text"
-                                placeholder="bigmodel"
+                                placeholder="doubao-seed-2-0-mini-260428"
                                 value={asrModelInput}
                                 onChange={(e) => setAsrModelInput(e.target.value)}
                                 className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
                              />
-                             <p className="text-xs text-gray-400">默认: bigmodel（可自定义填写方舟语音模型ID）。</p>
+                             <p className="text-xs text-gray-400">Default: doubao-seed-2-0-mini-260428 (custom Ark ASR model ID supported).</p>
+                        </div>
+                        <div className="space-y-2">
+                             <label className="text-xs font-bold text-gray-400 uppercase flex items-center gap-2">
+                                <Globe size={14} /> TTS Base URL
+                             </label>
+                             <input
+                                type="text"
+                                placeholder="/api/v3"
+                                value={ttsBaseUrlInput}
+                                onChange={(e) => setTtsBaseUrlInput(e.target.value)}
+                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
+                             />
+                             <p className="text-xs text-gray-400">Default: /api/v3 (Ark proxy). DMX use /dmx/v1 with DMX key.</p>
+                        </div>
+                        <div className="space-y-2">
+                             <label className="text-xs font-bold text-gray-400 uppercase flex items-center gap-2">
+                                <Bot size={14} /> TTS Model
+                             </label>
+                             <input
+                                type="text"
+                                placeholder="zh_female_vv_uranus_bigtts"
+                                value={ttsModelInput}
+                                onChange={(e) => setTtsModelInput(e.target.value)}
+                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
+                             />
+                             <p className="text-xs text-gray-400">Default: zh_female_vv_uranus_bigtts (Vivi 2.0)</p>
+                        </div>
+                        <div className="space-y-2">
+                             <label className="text-xs font-bold text-gray-400 uppercase flex items-center gap-2">
+                                <Key size={14} /> TTS App ID
+                             </label>
+                             <input
+                                type="text"
+                                placeholder="Enter App ID"
+                                value={ttsAppIdInput}
+                                onChange={(e) => setTtsAppIdInput(e.target.value)}
+                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
+                             />
+                             <p className="text-xs text-gray-400">Volcengine App ID for TTS authentication.</p>
+                        </div>
+                        <div className="space-y-2">
+                             <label className="text-xs font-bold text-gray-400 uppercase flex items-center gap-2">
+                                <Key size={14} /> TTS Access Token
+                             </label>
+                             <input
+                                type="password"
+                                placeholder="your-access-token"
+                                value={ttsAccessTokenInput}
+                                onChange={(e) => setTtsAccessTokenInput(e.target.value)}
+                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
+                             />
+                             <p className="text-xs text-gray-400">Volcengine Access Token for TTS authentication.</p>
                         </div>
                         <div className="space-y-2">
                              <label className="text-xs font-bold text-gray-400 uppercase flex items-center gap-2">

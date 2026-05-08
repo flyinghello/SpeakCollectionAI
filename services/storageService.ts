@@ -1,8 +1,46 @@
-import { PracticeEntry, ReviewAction } from "../types";
+import { PracticeEntry, ReviewAction, ReviewStats } from "../types";
 
 const STORAGE_KEY = "speaksmart_entries";
 const SETTINGS_KEY = "speaksmart_settings";
 const LISTENERS = new Set<() => void>();
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_EF = 2.5;
+const MIN_EF = 1.3;
+
+const normalizeReviewStats = (stats?: Partial<ReviewStats>): ReviewStats => {
+  const safeStats = stats ?? {};
+  const repetitions =
+    typeof safeStats.repetitions === "number"
+      ? Math.max(0, Math.floor(safeStats.repetitions))
+      : typeof safeStats.level === "number"
+        ? Math.max(0, Math.floor(safeStats.level))
+        : 0;
+
+  const intervalDays =
+    typeof safeStats.intervalDays === "number"
+      ? Math.max(1, Math.round(safeStats.intervalDays))
+      : repetitions === 0
+        ? 1
+        : repetitions === 1
+          ? 1
+          : repetitions === 2
+            ? 6
+            : Math.max(6, repetitions * 2);
+
+  return {
+    level: repetitions,
+    repetitions,
+    intervalDays,
+    easinessFactor:
+      typeof safeStats.easinessFactor === "number"
+        ? Math.max(MIN_EF, safeStats.easinessFactor)
+        : DEFAULT_EF,
+    nextReviewTime:
+      typeof safeStats.nextReviewTime === "number"
+        ? safeStats.nextReviewTime
+        : Date.now(),
+  };
+};
 
 const notifyListeners = () => {
   LISTENERS.forEach(listener => listener());
@@ -15,12 +53,20 @@ export const subscribeToEntries = (listener: () => void) => {
 
 export const getEntries = (): PracticeEntry[] => {
   const data = localStorage.getItem(STORAGE_KEY);
-  return data ? JSON.parse(data) : [];
+  const entries: PracticeEntry[] = data ? JSON.parse(data) : [];
+  return entries.map((entry) => ({
+    ...entry,
+    reviewStats: normalizeReviewStats(entry.reviewStats),
+  }));
 };
 
 export const saveEntry = (entry: PracticeEntry) => {
   const entries = getEntries();
-  const updatedEntries = [entry, ...entries];
+  const normalizedEntry: PracticeEntry = {
+    ...entry,
+    reviewStats: normalizeReviewStats(entry.reviewStats),
+  };
+  const updatedEntries = [normalizedEntry, ...entries];
   localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedEntries));
   notifyListeners();
 };
@@ -29,7 +75,10 @@ export const updateEntry = (updatedEntry: PracticeEntry) => {
   const entries = getEntries();
   const index = entries.findIndex((e) => e.id === updatedEntry.id);
   if (index !== -1) {
-    entries[index] = updatedEntry;
+    entries[index] = {
+      ...updatedEntry,
+      reviewStats: normalizeReviewStats(updatedEntry.reviewStats),
+    };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
     notifyListeners();
   }
@@ -56,7 +105,10 @@ export const importEntries = (newEntries: PracticeEntry[]): number => {
     newEntries.forEach(e => {
         // Basic validation
         if (e.id && e.originalText && e.analysis) {
-            entryMap.set(e.id, e);
+            entryMap.set(e.id, {
+              ...e,
+              reviewStats: normalizeReviewStats(e.reviewStats),
+            });
             addedCount++;
         }
     });
@@ -78,6 +130,10 @@ export interface AppSettings {
   modelId?: string;
   asrBaseUrl?: string;
   asrModel?: string;
+  ttsBaseUrl?: string;
+  ttsModel?: string;
+  ttsAppId?: string;
+  ttsAccessToken?: string;
 }
 
 export const getSettings = (): AppSettings => {
@@ -86,7 +142,15 @@ export const getSettings = (): AppSettings => {
 };
 
 export const saveSettings = (settings: AppSettings) => {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  const current = getSettings();
+  const definedUpdates = Object.fromEntries(
+    Object.entries(settings).filter(([, value]) => value !== undefined),
+  ) as AppSettings;
+  const merged: AppSettings = {
+    ...current,
+    ...definedUpdates,
+  };
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(merged));
   // Could notify, but usually settings update is local
 };
 
@@ -104,40 +168,58 @@ export const getReviewQueue = (includeTodayFallback: boolean = false): PracticeE
       queue = entries.filter(e => e.timestamp >= todayStart);
   }
 
-  // Sort: Today's items first, then by nextReviewTime (overdue first)
+  // Sort: overdue first, then harder cards first (lower EF / lower repetitions).
   return queue.sort((a, b) => {
-    const aIsToday = a.timestamp >= todayStart;
-    const bIsToday = b.timestamp >= todayStart;
+    const dueDelta = a.reviewStats.nextReviewTime - b.reviewStats.nextReviewTime;
+    if (dueDelta !== 0) return dueDelta;
 
-    if (aIsToday && !bIsToday) return -1;
-    if (!aIsToday && bIsToday) return 1;
-    
-    return a.reviewStats.nextReviewTime - b.reviewStats.nextReviewTime;
+    const efDelta = a.reviewStats.easinessFactor - b.reviewStats.easinessFactor;
+    if (efDelta !== 0) return efDelta;
+
+    return a.reviewStats.repetitions - b.reviewStats.repetitions;
   });
 };
 
 export const processReview = (entry: PracticeEntry, action: ReviewAction): PracticeEntry => {
   const now = Date.now();
-  let nextLevel = entry.reviewStats.level;
-  let nextReviewTime = now;
+  const currentStats = normalizeReviewStats(entry.reviewStats);
+  const quality = action === ReviewAction.FAMILIAR ? 4 : 2; // SM-2 quality [0..5]
+  const qualityDistance = 5 - quality;
 
-  // Simple Spaced Repetition Logic
-  const intervals = [1 * 60 * 1000, 10 * 60 * 1000, 24 * 60 * 60 * 1000, 3 * 24 * 60 * 60 * 1000, 7 * 24 * 60 * 60 * 1000];
+  let nextEf = currentStats.easinessFactor
+    + (0.1 - qualityDistance * (0.08 + qualityDistance * 0.02));
+  nextEf = Math.max(MIN_EF, nextEf);
 
-  if (action === ReviewAction.STRANGER) {
-    nextLevel = 0; // Reset
-    nextReviewTime = now + intervals[0];
+  let nextRepetitions = currentStats.repetitions;
+  let nextIntervalDays = currentStats.intervalDays;
+
+  if (quality < 3) {
+    nextRepetitions = 0;
+    nextIntervalDays = 1;
   } else {
-    nextLevel = Math.min(nextLevel + 1, intervals.length);
-    const interval = intervals[Math.min(nextLevel, intervals.length - 1)];
-    nextReviewTime = now + interval;
+    nextRepetitions += 1;
+    if (nextRepetitions === 1) {
+      nextIntervalDays = 1;
+    } else if (nextRepetitions === 2) {
+      nextIntervalDays = 6;
+    } else {
+      nextIntervalDays = Math.max(
+        1,
+        Math.round(currentStats.intervalDays * nextEf),
+      );
+    }
   }
+
+  const nextReviewTime = now + nextIntervalDays * ONE_DAY_MS;
 
   const updatedEntry: PracticeEntry = {
     ...entry,
     reviewStats: {
-      level: nextLevel,
-      nextReviewTime: nextReviewTime,
+      level: nextRepetitions,
+      repetitions: nextRepetitions,
+      intervalDays: nextIntervalDays,
+      easinessFactor: nextEf,
+      nextReviewTime,
     },
   };
 
